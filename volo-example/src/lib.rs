@@ -2,14 +2,18 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
     sync::{Arc, Mutex},
 };
 
-use anyhow::Ok;
+use anyhow::{Ok, anyhow};
 use lazy_static::lazy_static;
 use pilota::FastStr;
 use tracing_subscriber::fmt::format;
-use volo_gen::volo::example::{DeleteItemResponse, PingResponse, SetItemResponse, ItemServicePingResultSend, ItemServiceRequestRecv};
+use volo_gen::volo::example::{
+    DeleteItemResponse, ItemServicePingResultSend, ItemServiceRequestRecv, PingResponse,
+    SetItemResponse,
+};
 use volo_thrift::ResponseError;
 type Db = Arc<Mutex<HashMap<FastStr, FastStr>>>;
 
@@ -72,16 +76,14 @@ impl volo_gen::volo::example::ItemService for S {
     > {
         println!("delete_item");
         let mut db = DB.lock().unwrap();
-		let mut count = 0;
-		for k in _req.keys.clone() {
-			if db.contains_key(&k) {
-				db.remove(&k);
-				count += 1;
-			}
-		}
-        Ok(DeleteItemResponse {
-            count,
-        })
+        let mut count = 0;
+        for k in _req.keys.clone() {
+            if db.contains_key(&k) {
+                db.remove(&k);
+                count += 1;
+            }
+        }
+        Ok(DeleteItemResponse { count })
     }
 
     async fn ping(
@@ -90,12 +92,11 @@ impl volo_gen::volo::example::ItemService for S {
     ) -> ::core::result::Result<volo_gen::volo::example::PingResponse, ::volo_thrift::AnyhowError>
     {
         println!("ping:");
-		if let Some(v) = _req.message.clone() {
-			println!("{}", v.to_string());	
-		}
-		else {
-			println!("PONG");
-		}
+        if let Some(v) = _req.message.clone() {
+            println!("{}", v.to_string());
+        } else {
+            println!("PONG");
+        }
         Ok(PingResponse {
             message: match _req.message {
                 Some(v) => v.clone(),
@@ -103,52 +104,91 @@ impl volo_gen::volo::example::ItemService for S {
             },
         })
     }
-
-	
 }
 
 #[derive(Clone)]
 pub struct LogService<S>(S);
 
 // #[volo::service]
+// impl<Cx, Req, S> volo::Service<Cx, Req> for LogService<S>
+// where
+//     Req: std::fmt::Debug + Send + 'static ,
+//     S: Send + 'static + volo::Service<Cx, Req> + Sync,
+//     S::Response: std::fmt::Debug,
+//     S::Error: std::fmt::Debug,
+//     Cx: Send + 'static,
+// {
+//     type Response = S::Response;
+
+//     type Error = anyhow::Error;
+
+//     type Future<'cx> = impl Future<Output = Result<S::Response, Self::Error>> + 'cx;
+
+//     fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
+//     where
+//         's: 'cx,
+//     {
+//         async move {
+//             let now = std::time::Instant::now();
+//         	// tracing::debug!("Received request {:?}", &req);
+// 			println!("{:?}", req);
+// 			let req_str =format!("{:?}", req);
+// 			let req_str = req_str.as_str();
+
+// 			if req_str.starts_with("Ping") {
+// 				println!("Ping");
+// 				return Err(anyhow::Error::msg("Ping"));
+// 			}
+
+// 			let resp = self.0.call(cx, req).await;
+// 			let resp = match resp {
+// 				Result::Ok(v) => {
+// 					Ok(v)
+// 				}
+// 				Err(_e) => {
+// 					Err(anyhow::Error::msg("some err"))
+// 				}
+
+// 			};
+
+// 			println!("{:?}", resp);
+
+// 			// tracing::debug!("Sent response {:?}", &resp);
+// 			tracing::info!("Request took {}ms", now.elapsed().as_millis());
+// 			resp
+//         }
+//     }
+
+// }
+
+#[volo::service]
 impl<Cx, Req, S> volo::Service<Cx, Req> for LogService<S>
 where
-    Req: std::fmt::Debug + Send + 'static ,
+    Req: std::fmt::Debug + Send + 'static,
     S: Send + 'static + volo::Service<Cx, Req> + Sync,
     S::Response: std::fmt::Debug,
     S::Error: std::fmt::Debug,
     Cx: Send + 'static,
+    anyhow::Error: Into<S::Error>,
 {
     async fn call(&self, cx: &mut Cx, req: Req) -> Result<S::Response, S::Error> {
         let now = std::time::Instant::now();
-        // tracing::debug!("Received request {:?}", &req);
-		println!("{:?}", req);
-		let req_str =format!("{:?}", req);
-		let req_str = req_str.as_str();
+        tracing::debug!("Received request {:?}", &req);
 
-		if req_str.starts_with("Ping") {
-			println!("Ping");
-		}
+        let req_str = format!("{:?}", req);
+        let req_str = req_str.as_str();
+
+        if req_str.starts_with("Ping") {
+            println!("Ping");
+            return Err(anyhow!("reject").into());
+        }
 
         let resp = self.0.call(cx, req).await;
-		println!("{:?}", resp);
-
-        // tracing::debug!("Sent response {:?}", &resp);
+        tracing::debug!("Sent response {:?}", &resp);
         tracing::info!("Request took {}ms", now.elapsed().as_millis());
         resp
     }
-
-    type Response = S::Response;
-
-    type Error = S::Error;
-
-    type Future<'cx> = impl std::future::Future<Output = Result<Self::Response, Self::Error>> + 'cx
-    where
-        Cx: 'cx,
-        Self: 'cx;
-
 }
-
 pub struct LogLayer;
 
 impl<S> volo::Layer<S> for LogLayer {

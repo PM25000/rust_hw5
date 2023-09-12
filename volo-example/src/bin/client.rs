@@ -10,7 +10,7 @@ lazy_static! {
     static ref CLIENT: volo_gen::volo::example::ItemServiceClient = {
         let addr: SocketAddr = "127.0.0.1:10818".parse().unwrap();
         volo_gen::volo::example::ItemServiceClientBuilder::new("volo-example")
-            .layer_outer(LogLayer)
+            // .layer_outer(LogLayer)
             .address(addr)
             .build()
     };
@@ -77,38 +77,38 @@ async fn ping(msg: Option<String>) -> volo_gen::volo::example::PingResponse {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let req = volo_gen::volo::example::PostItemRequest {
-        name: FastStr::from("ddd"),
-    };
-    let resp = CLIENT.post_item(req).await;
-    match resp {
-        Ok(info) => tracing::info!("{:?}", info),
-        Err(e) => tracing::error!("{:?}", e),
-    }
+    // let req = volo_gen::volo::example::PostItemRequest {
+    //     name: FastStr::from("ddd"),
+    // };
+    // let resp = CLIENT.post_item(req).await;
+    // match resp {
+    //     Ok(info) => tracing::info!("{:?}", info),
+    //     Err(e) => tracing::error!("{:?}", e),
+    // }
 
-    let resp = set_item(FastStr::from("key"), FastStr::from("value")).await;
+    // let resp = set_item(FastStr::from("key"), FastStr::from("value")).await;
 
-    assert_eq!(resp.message, FastStr::from("OK"));
+    // assert_eq!(resp.message, FastStr::from("OK"));
 
-    let resp = get_item(FastStr::from("key")).await;
+    // let resp = get_item(FastStr::from("key")).await;
 
-    assert_eq!(resp.value, FastStr::from("value"));
+    // assert_eq!(resp.value, FastStr::from("value"));
 
-    let resp = delete_item(vec![FastStr::from("key")]).await;
+    // let resp = delete_item(vec![FastStr::from("key")]).await;
 
-    assert_eq!(resp.count, 1);
+    // assert_eq!(resp.count, 1);
 
-    for i in 0..3 {
-        let resp = ping(Some(format!("ping {}", i))).await;
-        //sleep
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        tracing::info!("{:?}", resp);
-        assert_eq!(resp.message, FastStr::from(format!("ping {}", i)));
-    }
+    // for i in 0..3 {
+    //     let resp = ping(Some(format!("ping {}", i))).await;
+    //     //sleep
+    //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    //     tracing::info!("{:?}", resp);
+    //     assert_eq!(resp.message, FastStr::from(format!("ping {}", i)));
+    // }
 
-    let resp = ping(None).await;
+    // let resp = ping(None).await;
 
-    assert_eq!(resp.message.to_ascii_lowercase(), FastStr::from("pong"));
+    // assert_eq!(resp.message.to_ascii_lowercase(), FastStr::from("pong"));
 
     loop {
         print!("> ");
