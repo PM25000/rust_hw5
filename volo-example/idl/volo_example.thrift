@@ -53,7 +53,32 @@ struct PingResponse {
     1: required string message,
 }
 
+struct SubscribeRequest {
+    1: required i64 id,
+}
 
+struct SubscribeResponse {
+    1: required i64 id,
+    2: required string message,
+}
+
+struct UnsubscribeRequest {
+    1: required i64 id,
+}
+
+struct UnsubscribeResponse {
+    1: required i64 id,
+    2: required string message,
+}
+
+struct PublishRequest {
+    1: required i64 id,
+    2: required string message,
+}
+
+struct PublishResponse {
+    1: required i64 count,
+}
 
 
 
@@ -63,4 +88,6 @@ service ItemService {
     SetItemResponse SetItem (1: SetItemRequest req),
     DeleteItemResponse DeleteItem (1: DeleteItemRequest req),
     PingResponse Ping (1: PingRequest req),
+    SubscribeResponse Subscribe (1: SubscribeRequest req),
+    PublishResponse Publish (1: PublishRequest req),
 }

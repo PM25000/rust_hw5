@@ -4,9 +4,10 @@ use std::{
     collections::HashMap,
     future::Future,
     sync::{Arc, Mutex},
+    thread::spawn,
 };
 
-use anyhow::{Ok, anyhow};
+use anyhow::{anyhow, Ok};
 use lazy_static::lazy_static;
 use pilota::FastStr;
 use tracing_subscriber::fmt::format;
@@ -16,9 +17,11 @@ use volo_gen::volo::example::{
 };
 use volo_thrift::ResponseError;
 type Db = Arc<Mutex<HashMap<FastStr, FastStr>>>;
+type Channels = Arc<Mutex<HashMap<i64, tokio::sync::broadcast::Sender<FastStr>>>>;
 
 lazy_static! {
     static ref DB: Db = Arc::new(Mutex::new(HashMap::new()));
+    static ref CHANNELS: Channels = Arc::new(Mutex::new(HashMap::new()));
 }
 pub struct S;
 
@@ -103,6 +106,58 @@ impl volo_gen::volo::example::ItemService for S {
                 None => FastStr::from("PONG"),
             },
         })
+    }
+
+    async fn subscribe(
+        &self,
+        _req: volo_gen::volo::example::SubscribeRequest,
+    ) -> ::core::result::Result<
+        volo_gen::volo::example::SubscribeResponse,
+        ::volo_thrift::AnyhowError,
+    > {
+        println!("subscribe");
+        let channels = CHANNELS.lock().unwrap();
+        let channel_id = _req.id.clone();
+        let rx = if !channels.contains_key(&channel_id) {
+            let (tx, _rx) = tokio::sync::broadcast::channel(10);
+            channels.insert(channel_id, tx);
+            _rx
+        } else {
+            channels.get(&channel_id).unwrap().subscribe()
+        };
+        let mut resp = volo_gen::volo::example::SubscribeResponse::default();
+        let message = rx.recv().await;
+        if let Result::Ok(message) = message {
+            resp.message = message;
+        }
+        else {
+            resp.message = FastStr::from("error");
+        }
+        Ok(resp)
+    }
+
+    async fn publish(
+        &self,
+        _req: volo_gen::volo::example::PublishRequest,
+    ) -> ::core::result::Result<volo_gen::volo::example::PublishResponse, ::volo_thrift::AnyhowError>
+    {
+        println!("publish");
+        let mut channels = CHANNELS.lock().unwrap();
+        let channel_id = _req.id.clone();
+        if !channels.contains_key(&channel_id) {
+            let mut resp = volo_gen::volo::example::PublishResponse::default();
+            resp.count = 0;
+            return Ok(resp);
+        }
+        let message = _req.message.clone();
+        let mut count = 0;
+        for tx in channels.get_mut(&channel_id).unwrap() {
+            tx.send(message.clone()).unwrap();
+            count += 1;
+        }
+        let mut resp = volo_gen::volo::example::PublishResponse::default();
+        resp.count = count;
+        Ok(resp)
     }
 }
 
